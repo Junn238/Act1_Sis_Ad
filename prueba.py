@@ -1,6 +1,14 @@
 import pygame
 import sys
 
+
+'''
+Funcionalidad actual:
+-Personaje: avanzar (W, A, S, D), saltar (espacio), colision con plataforma
+- Plataforma: colisión, movimiento (Flechas izq y der)
+'''
+
+
 ANCHO, LARGO = 1080, 720
 
 #setup
@@ -91,6 +99,9 @@ all_sprites.add(P1)
 platforms = pygame.sprite.Group()
 platforms.add(Pl1)
 
+
+
+#loop principal
 while True:
     #eventos
     for event in pygame.event.get():
@@ -101,7 +112,8 @@ while True:
     #actualizar pantalla
     screen.fill("white")
     
-    #renderizar el juego
+    
+    #movimiento del personaje/plataforma
     P1.move()
     P1.update()
 
