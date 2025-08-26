@@ -1,139 +1,177 @@
 import pygame
 import sys
 
+# dino_simple.py
+# Juego tipo "dinosaurio" simplificado usando Pygame
+# - El "dinosaurio" es un cuadro rojo que salta
+# - Los obstáculos son rectángulos azules
+# Controles: Espacio o Flecha ↑ para saltar. R para reiniciar cuando pierdes. ESC para salir.
 
-'''
-Funcionalidad actual:
--Personaje: avanzar (W, A, S, D), saltar (espacio), colision con plataforma
-- Plataforma: colisión, movimiento (Flechas izq y der)
-'''
+import sys
+import random
+import pygame
 
+# ---------------------------- Configuración básica ----------------------------
+ANCHO = 800
+ALTO = 400
+SUELO_Y = 320         # línea del suelo
+TAM_JUGADOR = 40      # tamaño del cuadro rojo
+GRAVEDAD = 0.9
+IMPULSO_SALTO = -16
+VEL_INICIAL = 6
+VEL_MAX = 17
+AUMENTO_VEL_CADA = 8  # cada cuántos puntos sube la velocidad
+FPS = 60
 
-ANCHO, LARGO = 1080, 720
+COLOR_FONDO = (245, 245, 245)
+COLOR_SUELO = (200, 200, 200)
+COLOR_JUGADOR = (220, 20, 60)   # rojo
+COLOR_OBSTACULO = (30, 144, 255) # azul
+COLOR_TEXTO = (20, 20, 20)
 
-#setup
-pygame.init()
+# Evento de temporizador para crear obstáculos
+SPAWN_OBST = pygame.USEREVENT + 1
 
-screen = pygame.display.set_mode((ANCHO, LARGO))
-pygame.display.set_caption("Demo")
-clock  = pygame.time.Clock()
-
-vec  = pygame.math.Vector2  #do dimensiones
-DT   = 0
-FRIC = -0.12
-ACC  = 0.5
-
-font = pygame.font.Font(None, 36)
-
-
-class Player(pygame.sprite.Sprite):
+class Jugador:
     def __init__(self):
-        super().__init__()
-        self.surf = pygame.Surface((30, 30))
-        self.surf.fill("red")
-        self.rect = self.surf.get_rect()
+        self.rect = pygame.Rect(80, SUELO_Y - TAM_JUGADOR, TAM_JUGADOR, TAM_JUGADOR)
+        self.vel_y = 0
+        self.en_suelo = True
 
-        self.pos = vec((ANCHO//2, LARGO//2))
-        self.vel = vec(0,0)
-        self.acc = vec(0,0)
+    def saltar(self):
+        if self.en_suelo:
+            self.vel_y = IMPULSO_SALTO
+            self.en_suelo = False
 
-    def move(self):
-        self.acc = vec(0, 0.5)
-        pressed_keys = pygame.key.get_pressed()
+    def actualizar(self):
+        # aplicar gravedad
+        self.vel_y += GRAVEDAD
+        self.rect.y += int(self.vel_y)
+        # limitar al suelo
+        if self.rect.bottom >= SUELO_Y:
+            self.rect.bottom = SUELO_Y
+            self.vel_y = 0
+            self.en_suelo = True
 
-        if pressed_keys[pygame.K_a]:
-            self.acc.x = -ACC
-        if pressed_keys[pygame.K_d]:
-            self.acc.x = ACC
-        
-        self.acc.x += self.vel.x * FRIC
-        self.vel += self.acc
-        self.pos += self.vel + 0.5 * self.acc
+    def dibujar(self, surface):
+        pygame.draw.rect(surface, COLOR_JUGADOR, self.rect, border_radius=6)
 
-        if self.pos.x > ANCHO:
-            self.pos.x = 0
-        if self.pos.x < 0:
-            self.pos.x = ANCHO
+class Obstaculo:
+    def __init__(self, x, ancho, alto):
+        self.rect = pygame.Rect(x, SUELO_Y - alto, ancho, alto)
 
-        self.rect.midbottom = self.pos
+    def actualizar(self, vel):
+        self.rect.x -= vel
 
-    def update(self):
-        hits = pygame.sprite.spritecollide(P1, platforms, False)
-        if P1.vel.y > 0:
-            if hits:
-                self.pos.y = hits[0].rect.top + 1
-                self.vel.y = 0
+    def fuera_de_pantalla(self):
+        return self.rect.right < 0
 
-    def jump(self):
-        hits = pygame.sprite.spritecollide(P1, platforms, False)
-        if hits:
-            self.vel.y = -12
+    def dibujar(self, surface):
+        pygame.draw.rect(surface, COLOR_OBSTACULO, self.rect, border_radius=3)
 
+def crear_obstaculo():
+    # alturas y anchos básicos para variar
+    alto = random.choice([30, 45, 60, 75])
+    ancho = random.choice([20, 26, 32, 44])
+    x = ANCHO + random.randint(0, 80)
+    return Obstaculo(x, ancho, alto)
 
-class Platform(pygame.sprite.Sprite):
-    def __init__(self):
-        super().__init__()
-        self.surf = pygame.Surface((200, 30))
-        self.surf.fill("green")
-        self.rect = self.surf.get_rect()
-        
-        self.pos = vec((ANCHO//2, LARGO))
+def texto(surface, fuente, msg, x, y):
+    img = fuente.render(msg, True, COLOR_TEXTO)
+    surface.blit(img, (x, y))
 
-    def move(self):
-        pressed_keys = pygame.key.get_pressed()
+def bucle_juego():
+    pygame.init()
+    pygame.display.set_caption("Cuadro Rojo vs Rectángulos Azules")
+    screen = pygame.display.set_mode((ANCHO, ALTO))
+    clock = pygame.time.Clock()
+    fuente = pygame.font.SysFont(None, 32)
+    fuente_grande = pygame.font.SysFont(None, 54)
 
-        if pressed_keys[pygame.K_LEFT]:
-            self.pos.x -= 10
-        if pressed_keys[pygame.K_RIGHT]:
-            self.pos.x += 10
+    jugador = Jugador()
+    obstaculos = []
+    puntuacion = 0
+    velocidad = VEL_INICIAL
+    vivo = True
 
-        self.rect.midbottom = self.pos
+    # Temporizador: cada 1200–1700 ms aparece un obstáculo
+    pygame.time.set_timer(SPAWN_OBST, random.randint(1200, 1700))
 
-Pl1 = Platform()
-P1 = Player()
+    while True:
+        for event in pygame.event.get():
+            if event.type == pygame.QUIT:
+                pygame.quit()
+                sys.exit()
+            if event.type == pygame.KEYDOWN:
+                if event.key in (pygame.K_SPACE, pygame.K_UP):
+                    if vivo:
+                        jugador.saltar()
+                    else:
+                        # reiniciar con espacio/arriba
+                        jugador = Jugador()
+                        obstaculos.clear()
+                        puntuacion = 0
+                        velocidad = VEL_INICIAL
+                        vivo = True
+                        pygame.time.set_timer(SPAWN_OBST, random.randint(1200, 1700))
+                if event.key == pygame.K_ESCAPE:
+                    pygame.quit()
+                    sys.exit()
+                if event.key == pygame.K_r and not vivo:
+                    # reiniciar con R
+                    jugador = Jugador()
+                    obstaculos.clear()
+                    puntuacion = 0
+                    velocidad = VEL_INICIAL
+                    vivo = True
+                    pygame.time.set_timer(SPAWN_OBST, random.randint(1200, 1700))
+            if event.type == SPAWN_OBST and vivo:
+                obstaculos.append(crear_obstaculo())
+                # reprogramar el próximo spawn con leve aleatoriedad
+                pygame.time.set_timer(SPAWN_OBST, random.randint(900, 1500))
 
-all_sprites = pygame.sprite.Group()
-all_sprites.add(Pl1)
-all_sprites.add(P1)
+        # Lógica del juego
+        if vivo:
+            jugador.actualizar()
+            for obs in list(obstaculos):
+                obs.actualizar(velocidad)
+                if obs.fuera_de_pantalla():
+                    obstaculos.remove(obs)
+                    puntuacion += 1
+                    # cada ciertos puntos aumenta un poco la velocidad
+                    if puntuacion % AUMENTO_VEL_CADA == 0 and velocidad < VEL_MAX:
+                        velocidad += 1
 
-platforms = pygame.sprite.Group()
-platforms.add(Pl1)
+            # Colisiones
+            for obs in obstaculos:
+                if jugador.rect.colliderect(obs.rect):
+                    vivo = False
+                    break
 
+        # Dibujo
+        screen.fill(COLOR_FONDO)
 
+        # suelo
+        pygame.draw.line(screen, COLOR_SUELO, (0, SUELO_Y), (ANCHO, SUELO_Y), 3)
 
-#loop principal
-while True:
-    #eventos
-    for event in pygame.event.get():
-        if event.type == pygame.QUIT:
-            pygame.quit()
-            sys.exit()
+        # elementos
+        for obs in obstaculos:
+            obs.dibujar(screen)
+        jugador.dibujar(screen)
 
-    #actualizar pantalla
-    screen.fill("white")
-    
-    
-    #movimiento del personaje/plataforma
-    P1.move()
-    P1.update()
+        # UI
+        texto(screen, fuente, f"Puntos: {puntuacion}", 16, 12)
+        if not vivo:
+            mensaje = "¡Perdiste! Pulsa R o Espacio para reiniciar."
+            w = fuente.size(mensaje)[0]
+            texto(screen, fuente, mensaje, (ANCHO - w)//2, 70)
+            titulo = "Cuadro Rojo vs Rectángulos Azules"
+            w2 = fuente_grande.size(titulo)[0]
+            img = fuente_grande.render(titulo, True, COLOR_TEXTO)
+            screen.blit(img, ((ANCHO - w2)//2, 22))
 
-    key_pressed = pygame.key.get_pressed()
-    if key_pressed[pygame.K_SPACE]:
-        P1.jump()
+        pygame.display.flip()
+        clock.tick(FPS)
 
-    Pl1.move()
-
-    for entity in all_sprites:
-        screen.blit(entity.surf, entity.rect)
-
-
-    text = font.render(f"Pos player: {int(P1.pos.x)}, {int(P1.pos.y)}", True, (0, 0, 0))
-    screen.blit(text, (10, 10))
-    
-    #flip() para actualizar algo
-    pygame.display.flip()
-
-    #limitar los PFS a 60
-    #delta time, usado para el framerate
-    pygame.display.update()
-    clock.tick(60)
+if __name__ == "__main__":
+    bucle_juego()
